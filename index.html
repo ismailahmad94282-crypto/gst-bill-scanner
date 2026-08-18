@@ -211,6 +211,12 @@
         <div>Drop bill photos here, or click to browse — handwritten, printed, or mixed</div>
         <input type="file" id="scan-input" accept="image/*" multiple>
       </div>
+      <div style="margin-bottom:14px;">
+        <button class="btn-primary" id="add-photos-btn" style="display:inline-flex;align-items:center;gap:8px;padding:11px 22px;font-size:14px;">
+          <span style="font-size:18px;line-height:1;">📷</span> Add Photos
+        </button>
+        <input type="file" id="add-photos-input" accept="image/*" multiple style="display:none;">
+      </div>
       <p class="hint" style="margin:0 0 14px;">Add as many photos as you like, then extract them together. Reads each photo with Google's free Gemini vision model, called directly from your browser with your own key. Review every row afterward, especially handwriting.</p>
 
       <div class="api-key-box" style="margin-bottom:14px;">
@@ -580,6 +586,15 @@ scanDropZone.addEventListener("drop", e => {
 scanInput.addEventListener("change", e => {
   addScanFiles(Array.from(e.target.files));
   scanInput.value = "";
+});
+
+// Dedicated "Add Photos" button
+const addPhotosBtn = document.getElementById("add-photos-btn");
+const addPhotosInput = document.getElementById("add-photos-input");
+addPhotosBtn.addEventListener("click", () => addPhotosInput.click());
+addPhotosInput.addEventListener("change", e => {
+  addScanFiles(Array.from(e.target.files));
+  addPhotosInput.value = "";
 });
 
 // Shrinks a photo to a max dimension + JPEG quality before sending it to
