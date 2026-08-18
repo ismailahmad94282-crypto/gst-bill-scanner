@@ -180,11 +180,17 @@
 
     <div id="upload-tab">
       <div class="drop-zone" id="drop-zone">
-        <div>Drop a .csv or .xlsx file here, or click to browse</div>
+        <div>Drop a .csv, .xlsx file, or a PDF bill here, or click to browse</div>
         <div class="file-name" id="file-name"></div>
-        <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls,.pdf">
       </div>
       <p class="template-link">Not sure what columns to use? <a href="#" id="download-template">Download a blank template</a> matching the expected headers.</p>
+
+      <div class="api-key-box" style="margin-top:14px;">
+        <label for="gemini-key-input-upload">Gemini API key (free — only needed for PDF bills)</label>
+        <input id="gemini-key-input-upload" type="text" placeholder="Paste your free key from aistudio.google.com/apikey" autocomplete="off">
+        <span class="hint">Not needed for .csv/.xlsx files. Required if you drop in a PDF bill — get a free key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Stored only in this browser (localStorage), never sent anywhere except Google.</span>
+      </div>
     </div>
 
     <div id="manual-tab" style="display:none;">
@@ -384,6 +390,11 @@ fileInput.addEventListener("change", e => {
 });
 
 function handleFile(file) {
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  if (isPdf) {
+    handlePdfUpload(file);
+    return;
+  }
   document.getElementById("file-name").textContent = "Loaded: " + file.name;
   const reader = new FileReader();
   reader.onload = evt => {
@@ -395,6 +406,37 @@ function handleFile(file) {
     renderPreview();
   };
   reader.readAsArrayBuffer(file);
+}
+
+// Reads a PDF bill dropped into the Upload tab using the same Gemini vision
+// extraction the Scan tab uses, and appends it as one more row rather than
+// replacing whatever's already loaded from a spreadsheet.
+async function handlePdfUpload(file) {
+  if (!geminiApiKey) {
+    document.getElementById("file-name").textContent = "Paste a free Gemini API key above first (get one at aistudio.google.com/apikey), then re-drop the PDF.";
+    return;
+  }
+  document.getElementById("file-name").textContent = "Reading " + file.name + "…";
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    const base64 = dataUrl.split(",")[1];
+    const extracted = await visionExtract({ base64, mediaType: "application/pdf" });
+    const row = normalizeExtractedRow(extracted);
+    uploadedRows = (uploadedRows || []).concat([row]);
+    renderPreview();
+    document.getElementById("file-name").textContent = "Loaded: " + file.name;
+  } catch (err) {
+    document.getElementById("file-name").textContent = "Failed to read " + file.name + " — " + err.message;
+  }
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = evt => resolve(evt.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 // Best-effort mapping from arbitrary uploaded column names to our schema keys
@@ -584,16 +626,25 @@ function scanStatusLabel(status) {
 document.getElementById("extract-btn").addEventListener("click", extractAllScans);
 
 // Gemini key — stored only in this browser via localStorage, never sent
-// anywhere except directly to Google's API.
+// anywhere except directly to Google's API. Two boxes (Scan tab and Upload
+// tab) both read/write the same key so it only needs to be pasted once.
 let geminiApiKey = localStorage.getItem("gstr_gemini_key") || "";
 
 const geminiKeyInput = document.getElementById("gemini-key-input");
-if (geminiApiKey) geminiKeyInput.value = geminiApiKey;
-geminiKeyInput.addEventListener("input", () => {
-  geminiApiKey = geminiKeyInput.value.trim();
+const geminiKeyInputUpload = document.getElementById("gemini-key-input-upload");
+if (geminiApiKey) {
+  geminiKeyInput.value = geminiApiKey;
+  geminiKeyInputUpload.value = geminiApiKey;
+}
+function syncGeminiKey(value) {
+  geminiApiKey = value.trim();
   if (geminiApiKey) localStorage.setItem("gstr_gemini_key", geminiApiKey);
   else localStorage.removeItem("gstr_gemini_key");
-});
+  geminiKeyInput.value = geminiApiKey;
+  geminiKeyInputUpload.value = geminiApiKey;
+}
+geminiKeyInput.addEventListener("input", () => syncGeminiKey(geminiKeyInput.value));
+geminiKeyInputUpload.addEventListener("input", () => syncGeminiKey(geminiKeyInputUpload.value));
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 
