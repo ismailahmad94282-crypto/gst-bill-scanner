@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Return Builder — GSTR-1 / GSTR-2 CSV Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#1B2A4A;
+    --ink-soft:#2E3E63;
+    --paper:#F6F3EC;
+    --paper-line:#E4DFD1;
+    --amber:#C77D2E;
+    --amber-soft:#EAD9BE;
+    --filed:#2F7A5E;
+    --filed-bg:#E4F0EA;
+    --pending:#B23A2E;
+    --pending-bg:#F5E4E1;
+    --mono: 'IBM Plex Mono', 'Courier New', monospace;
+    --serif: 'Fraunces', 'Georgia', serif;
+    --sans: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);min-height:100vh;}
+  .wrap{max-width:1040px;margin:0 auto;padding:48px 24px 80px;}
+
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:30px;
+    flex-wrap:wrap;gap:12px;
+  }
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin:0 0 6px;}
+  h1{font-family:var(--serif);font-weight:600;font-size:32px;margin:0;letter-spacing:-0.01em;}
+  .sub{font-family:var(--mono);font-size:12px;color:var(--ink-soft);text-align:right;line-height:1.6;}
+
+  .notice{
+    background:var(--amber-soft);border:1px solid var(--amber);border-radius:4px;
+    padding:14px 16px;font-size:13px;line-height:1.55;margin-bottom:28px;color:#5A3B14;
+  }
+
+  .toggle-row{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap;}
+  .toggle-btn{
+    flex:1;min-width:180px;padding:14px 18px;border:1.5px solid var(--paper-line);
+    background:#fff;border-radius:6px;cursor:pointer;font-family:var(--sans);text-align:left;
+  }
+  .toggle-btn b{display:block;font-family:var(--serif);font-size:16px;margin-bottom:2px;}
+  .toggle-btn span{font-size:12px;color:var(--ink-soft);}
+  .toggle-btn.active{border-color:var(--ink);background:#fff;box-shadow:inset 0 0 0 1.5px var(--ink);}
+
+  .tabs{display:flex;gap:6px;margin-bottom:18px;}
+  .tab-btn{
+    padding:9px 18px;font-size:13px;font-weight:600;border:1px solid #CFC9B8;
+    background:#FDFCF9;color:var(--ink-soft);border-radius:4px 4px 0 0;cursor:pointer;font-family:var(--sans);
+  }
+  .tab-btn.active{background:var(--ink);border-color:var(--ink);color:#fff;}
+
+  .panel{background:#fff;border:1px solid var(--paper-line);border-radius:6px;padding:26px;margin-bottom:32px;}
+
+  .drop-zone{
+    border:2px dashed #CFC9B8;border-radius:6px;padding:38px 20px;text-align:center;
+    color:var(--ink-soft);font-size:13.5px;margin-bottom:14px;cursor:pointer;
+  }
+  .drop-zone:hover{border-color:var(--amber);}
+  .drop-zone input{display:none;}
+  .file-name{font-family:var(--mono);font-size:12.5px;color:var(--ink);margin-top:8px;}
+
+  .template-link{font-size:12.5px;color:var(--ink-soft);}
+  .template-link a{color:var(--amber);font-weight:600;text-decoration:none;}
+
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{
+    text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--ink-soft);background:#FBF9F3;padding:9px 10px;border-bottom:1px solid var(--paper-line);
+    white-space:nowrap;
+  }
+  tbody td{padding:6px 8px;border-bottom:1px solid #F0ECDF;}
+  tbody input{
+    width:100%;border:1px solid #E4DFD1;border-radius:3px;padding:6px 7px;font-size:12.5px;
+    font-family:var(--sans);background:#FDFCF9;
+  }
+  tbody input:focus{outline:1.5px solid var(--amber);border-color:var(--amber);}
+  .row-del{background:none;border:none;color:var(--pending);cursor:pointer;font-size:16px;padding:2px 6px;}
+
+  .row-actions{display:flex;justify-content:space-between;align-items:center;margin-top:14px;}
+  .btn-ghost{
+    background:#fff;border:1px solid var(--ink);color:var(--ink);padding:8px 16px;
+    font-size:13px;font-weight:600;border-radius:4px;cursor:pointer;font-family:var(--sans);
+  }
+  .btn-primary{
+    background:var(--ink);color:#fff;border:none;padding:12px 26px;font-size:14px;font-weight:600;
+    border-radius:4px;cursor:pointer;font-family:var(--sans);
+  }
+  .btn-primary:hover{background:var(--ink-soft);}
+  .btn-primary:disabled{background:#B9B4A3;cursor:not-allowed;}
+
+  .preview-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .preview-head h2{font-family:var(--serif);font-size:19px;margin:0;}
+  .count-pill{font-family:var(--mono);font-size:12px;background:var(--filed-bg);color:var(--filed);padding:4px 10px;border-radius:12px;}
+
+  .table-scroll{overflow-x:auto;border:1px solid var(--paper-line);border-radius:6px;}
+
+  .empty{text-align:center;padding:40px 20px;color:#8A8471;font-size:13.5px;}
+
+  .generate-bar{
+    display:flex;justify-content:space-between;align-items:center;margin-top:22px;
+    padding-top:18px;border-top:1px solid var(--paper-line);flex-wrap:wrap;gap:12px;
+  }
+  .hint{font-size:12.5px;color:#8A8471;}
+
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--paper-line);font-size:12px;color:#8A8471;text-align:center;line-height:1.7;}
+  footer strong{color:var(--ink);}
+
+  .scan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin:14px 0;}
+  .scan-item{border:1px solid var(--paper-line);border-radius:6px;overflow:hidden;background:#fff;position:relative;}
+  .scan-item img{width:100%;height:100px;object-fit:cover;display:block;}
+  .scan-item .scan-info{padding:6px 8px;font-size:11px;}
+  .scan-item .scan-badge{
+    display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.03em;
+  }
+  .scan-badge.pending{background:var(--amber-soft);color:#5A3B14;}
+  .scan-badge.working{background:#DDE6F0;color:var(--ink-soft);}
+  .scan-badge.done{background:var(--filed-bg);color:var(--filed);}
+  .scan-badge.error{background:var(--pending-bg);color:var(--pending);}
+  .scan-remove{
+    position:absolute;top:4px;right:4px;background:rgba(27,42,74,.75);color:#fff;border:none;
+    border-radius:50%;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;
+  }
+
+  .api-key-box{
+    background:#FBF9F3;border:1px solid var(--paper-line);border-radius:6px;padding:14px 16px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .api-key-box label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:600;}
+  .api-key-box input{
+    font-family:var(--mono);font-size:13px;padding:9px 10px;border:1px solid #CFC9B8;border-radius:4px;background:#fff;
+  }
+  .api-key-box .hint a{color:var(--amber);font-weight:600;}
+
+  @media (max-width:640px){
+    header{flex-direction:column;align-items:flex-start;}
+    .sub{text-align:left;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <p class="eyebrow">Compliance Utility</p>
+      <h1>Return Builder</h1>
+    </div>
+    <div class="sub">GSTR‑1 / GSTR‑2 CSV GENERATOR<br>Formats your invoice data for filing</div>
+  </header>
+
+  <div class="notice">
+    <strong>What this does:</strong> Takes invoice data you already have — from a file export or typed in manually —
+    and arranges it into the standard GSTR‑1 (outward supply / sales) or GSTR‑2 (inward supply / purchase)
+    column format used for filing. It does not connect to the GST portal or check anything remotely; the CSV it
+    produces is meant to be uploaded to the official GST offline tool or portal yourself.
+  </div>
+
+  <div class="toggle-row">
+    <button class="toggle-btn active" data-return="gstr1">
+      <b>GSTR‑1</b><span>Outward supplies — invoices you issued (sales)</span>
+    </button>
+    <button class="toggle-btn" data-return="gstr2">
+      <b>GSTR‑2</b><span>Inward supplies — invoices you received (purchases)</span>
+    </button>
+  </div>
+
+  <div class="panel">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="upload">Upload file</button>
+      <button class="tab-btn" data-tab="manual">Enter manually</button>
+      <button class="tab-btn" data-tab="scan">Scan bill photos</button>
+    </div>
+
+    <div id="upload-tab">
+      <div class="drop-zone" id="drop-zone">
+        <div>Drop a .csv or .xlsx file here, or click to browse</div>
+        <div class="file-name" id="file-name"></div>
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+      </div>
+      <p class="template-link">Not sure what columns to use? <a href="#" id="download-template">Download a blank template</a> matching the expected headers.</p>
+    </div>
+
+    <div id="manual-tab" style="display:none;">
+      <div class="table-scroll">
+        <table id="manual-table">
+          <thead><tr id="manual-head"></tr></thead>
+          <tbody id="manual-body"></tbody>
+        </table>
+      </div>
+      <div class="row-actions">
+        <button class="btn-ghost" id="add-row">+ Add row</button>
+        <span class="hint" id="manual-hint"></span>
+      </div>
+    </div>
+
+    <div id="scan-tab" style="display:none;">
+      <div class="drop-zone" id="scan-drop-zone">
+        <div>Drop bill photos here, or click to browse — handwritten, printed, or mixed</div>
+        <input type="file" id="scan-input" accept="image/*" multiple>
+      </div>
+      <p class="hint" style="margin:0 0 14px;">Add as many photos as you like, then extract them together. Reads each photo with Google's free Gemini vision model, called directly from your browser with your own key. Review every row afterward, especially handwriting.</p>
+
+      <div class="api-key-box" style="margin-bottom:14px;">
+        <label for="gemini-key-input">Gemini API key (free, required)</label>
+        <input id="gemini-key-input" type="text" placeholder="Paste your free key from aistudio.google.com/apikey" autocomplete="off">
+        <span class="hint">No credit card needed — get one at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>. Stored only in this browser (localStorage), never sent anywhere except Google. Don't share this HTML file after pasting your key in — anyone with the file could read it from the page.</span>
+      </div>
+
+      <div id="scan-list"></div>
+      <div class="row-actions" id="scan-actions" style="display:none;">
+        <button class="btn-primary" id="extract-btn">Extract data from photos</button>
+        <span class="hint" id="scan-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-area"></div>
+
+  <footer>
+    Runs entirely in your browser — no data leaves this page.<br><br>
+    Developed by <strong>Ismail Ahmad</strong> · Mob: 9310794282 · Email: ismailahmad94282@gmail.com<br>
+    © All rights reserved. Do not copy, reproduce, or modify this tool without the developer's written permission.
+  </footer>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Field definitions per return type (mirrors the GST offline tool's B2B sheet)
+// ---------------------------------------------------------------
+const SCHEMAS = {
+  gstr1: {
+    label: "GSTR-1 (Outward)",
+    partyLabel: "Receiver",
+    fields: [
+      { key: "gstin",        header: "GSTIN/UIN of Recipient", placeholder: "07ABCPD1234E1Z5" },
+      { key: "partyName",    header: "Receiver Name",          placeholder: "Sharma Traders" },
+      { key: "invoiceNo",    header: "Invoice Number",         placeholder: "INV-2025-001" },
+      { key: "invoiceDate",  header: "Invoice date",           placeholder: "DD-MM-YYYY" },
+      { key: "invoiceValue", header: "Invoice Value",          placeholder: "11800" },
+      { key: "placeOfSupply",header: "Place Of Supply",        placeholder: "07-Delhi" },
+      { key: "reverseCharge",header: "Reverse Charge",         placeholder: "Y / N" },
+      { key: "invoiceType",  header: "Invoice Type",           placeholder: "Regular" },
+      { key: "rate",         header: "Rate",                   placeholder: "18" },
+      { key: "taxableValue", header: "Taxable Value",          placeholder: "10000" },
+      { key: "cess",         header: "Cess Amount",            placeholder: "0" }
+    ]
+  },
+  gstr2: {
+    label: "GSTR-2 (Inward)",
+    partyLabel: "Supplier",
+    fields: [
+      { key: "gstin",        header: "GSTIN of Supplier",  placeholder: "27AAECB2345F1Z9" },
+      { key: "partyName",    header: "Supplier Name",      placeholder: "Bhosale Agro Exports" },
+      { key: "invoiceNo",    header: "Invoice Number",     placeholder: "PB-2025-045" },
+      { key: "invoiceDate",  header: "Invoice date",       placeholder: "DD-MM-YYYY" },
+      { key: "invoiceValue", header: "Invoice Value",      placeholder: "23600" },
+      { key: "placeOfSupply",header: "Place Of Supply",    placeholder: "27-Maharashtra" },
+      { key: "reverseCharge",header: "Reverse Charge",     placeholder: "Y / N" },
+      { key: "invoiceType",  header: "Invoice Type",       placeholder: "Regular" },
+      { key: "rate",         header: "Rate",               placeholder: "18" },
+      { key: "taxableValue", header: "Taxable Value",      placeholder: "20000" },
+      { key: "cess",         header: "Cess Amount",        placeholder: "0" }
+    ]
+  }
+};
+
+let currentReturn = "gstr1";
+let currentTab = "upload";
+let manualRows = [];
+let uploadedRows = [];
+
+// ---------------------------------------------------------------
+// Return type toggle
+// ---------------------------------------------------------------
+document.querySelectorAll(".toggle-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".toggle-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentReturn = btn.dataset.return;
+    manualRows = [];
+    uploadedRows = [];
+    document.getElementById("file-name").textContent = "";
+    renderManualTable();
+    renderPreview();
+  });
+});
+
+// ---------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentTab = btn.dataset.tab;
+    document.getElementById("upload-tab").style.display = currentTab === "upload" ? "block" : "none";
+    document.getElementById("manual-tab").style.display = currentTab === "manual" ? "block" : "none";
+    document.getElementById("scan-tab").style.display = currentTab === "scan" ? "block" : "none";
+    renderPreview();
+  });
+});
+
+// ---------------------------------------------------------------
+// Manual entry table
+// ---------------------------------------------------------------
+function blankRow() {
+  const schema = SCHEMAS[currentReturn];
+  const row = {};
+  schema.fields.forEach(f => row[f.key] = "");
+  return row;
+}
+
+function renderManualTable() {
+  const schema = SCHEMAS[currentReturn];
+  const head = document.getElementById("manual-head");
+  head.innerHTML = schema.fields.map(f => `<th>${f.header}</th>`).join("") + `<th></th>`;
+
+  if (manualRows.length === 0) {
+    manualRows.push(blankRow(), blankRow(), blankRow());
+  }
+  document.getElementById("manual-hint").textContent =
+    `Fields shown match the official ${schema.label} column layout.`;
+
+  renderManualBody();
+}
+
+function renderManualBody() {
+  const schema = SCHEMAS[currentReturn];
+  const body = document.getElementById("manual-body");
+  body.innerHTML = manualRows.map((row, i) => `
+    <tr>
+      ${schema.fields.map(f => `
+        <td><input data-row="${i}" data-key="${f.key}" value="${row[f.key] || ''}" placeholder="${f.placeholder}"></td>
+      `).join("")}
+      <td><button class="row-del" data-row="${i}" title="Remove row">×</button></td>
+    </tr>
+  `).join("");
+
+  body.querySelectorAll("input").forEach(inp => {
+    inp.addEventListener("input", e => {
+      manualRows[e.target.dataset.row][e.target.dataset.key] = e.target.value;
+      renderPreview();
+    });
+  });
+  body.querySelectorAll(".row-del").forEach(btn => {
+    btn.addEventListener("click", e => {
+      manualRows.splice(e.target.dataset.row, 1);
+      renderManualBody();
+      renderPreview();
+    });
+  });
+}
+
+document.getElementById("add-row").addEventListener("click", () => {
+  manualRows.push(blankRow());
+  renderManualBody();
+});
+
+renderManualTable();
+
+// ---------------------------------------------------------------
+// File upload (CSV / XLSX)
+// ---------------------------------------------------------------
+const dropZone = document.getElementById("drop-zone");
+const fileInput = document.getElementById("file-input");
+
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#C77D2E"; });
+dropZone.addEventListener("dragleave", () => { dropZone.style.borderColor = "#CFC9B8"; });
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.style.borderColor = "#CFC9B8";
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", e => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  document.getElementById("file-name").textContent = "Loaded: " + file.name;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const data = new Uint8Array(evt.target.result);
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    uploadedRows = mapUploadedRows(json);
+    renderPreview();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Best-effort mapping from arbitrary uploaded column names to our schema keys
+function mapUploadedRows(json) {
+  const schema = SCHEMAS[currentReturn];
+  const aliasMap = {
+    gstin: ["gstin", "gstin/uin", "gstin no", "gst number", "party gstin"],
+    partyName: ["name", "party name", "receiver name", "supplier name", "customer", "vendor"],
+    invoiceNo: ["invoice number", "invoice no", "inv no", "invoice #"],
+    invoiceDate: ["invoice date", "date", "inv date"],
+    invoiceValue: ["invoice value", "total value", "invoice amount", "total amount"],
+    placeOfSupply: ["place of supply", "pos", "state"],
+    reverseCharge: ["reverse charge", "rcm"],
+    invoiceType: ["invoice type", "type"],
+    rate: ["rate", "tax rate", "gst rate"],
+    taxableValue: ["taxable value", "taxable amount"],
+    cess: ["cess", "cess amount"]
+  };
+
+  return json.map(srcRow => {
+    const lowerSrc = {};
+    Object.keys(srcRow).forEach(k => lowerSrc[k.trim().toLowerCase()] = srcRow[k]);
+    const mapped = {};
+    schema.fields.forEach(f => {
+      const aliases = aliasMap[f.key] || [f.key];
+      let val = "";
+      for (const a of aliases) {
+        if (lowerSrc[a] !== undefined && lowerSrc[a] !== "") { val = lowerSrc[a]; break; }
+      }
+      mapped[f.key] = String(val);
+    });
+    return mapped;
+  });
+}
+
+// ---------------------------------------------------------------
+// Template download
+// ---------------------------------------------------------------
+document.getElementById("download-template").addEventListener("click", e => {
+  e.preventDefault();
+  const schema = SCHEMAS[currentReturn];
+  const headerRow = schema.fields.map(f => f.header).join(",");
+  const sampleRow = schema.fields.map(f => f.placeholder).join(",");
+  downloadCSV(headerRow + "\n" + sampleRow, `${currentReturn}-template.csv`);
+});
+
+// ---------------------------------------------------------------
+// Preview + export
+// ---------------------------------------------------------------
+function renderPreview() {
+  const schema = SCHEMAS[currentReturn];
+  const rows = currentTab === "upload" ? uploadedRows : manualRows;
+  const filledRows = rows.filter(r => Object.values(r).some(v => String(v).trim() !== ""));
+  const area = document.getElementById("preview-area");
+
+  if (filledRows.length === 0) {
+    area.innerHTML = `<div class="panel"><div class="empty">No data yet — upload a file or enter rows above to see a preview here.</div></div>`;
+    return;
+  }
+
+  const rowsHtml = filledRows.map(r => `
+    <tr>${schema.fields.map(f => `<td>${escapeHtml(r[f.key] || "")}</td>`).join("")}</tr>
+  `).join("");
+
+  area.innerHTML = `
+    <div class="panel">
+      <div class="preview-head">
+        <h2>Preview — ${schema.label}</h2>
+        <span class="count-pill">${filledRows.length} row${filledRows.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>${schema.fields.map(f => `<th>${f.header}</th>`).join("")}</tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="generate-bar">
+        <span class="hint">Upload the downloaded file to the official GST offline tool or portal to file.</span>
+        <button class="btn-primary" id="export-btn">Generate ${schema.label} CSV</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("export-btn").addEventListener("click", () => {
+    exportCSV(filledRows, schema);
+  });
+}
+
+function exportCSV(rows, schema) {
+  const header = schema.fields.map(f => f.header).join(",");
+  const lines = rows.map(r =>
+    schema.fields.map(f => csvEscape(r[f.key] || "")).join(",")
+  );
+  downloadCSV([header, ...lines].join("\n"), `${currentReturn}-return.csv`);
+}
+
+function csvEscape(val) {
+  const s = String(val);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+
+function downloadCSV(content, filename) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+renderPreview();
+
+// ---------------------------------------------------------------
+// Scan bill photos (handwritten / printed) via Claude vision
+// ---------------------------------------------------------------
+let scanFiles = []; // { id, file, dataUrl, base64, mediaType, status, error, rawText }
+
+const scanDropZone = document.getElementById("scan-drop-zone");
+const scanInput = document.getElementById("scan-input");
+
+scanDropZone.addEventListener("click", () => scanInput.click());
+scanDropZone.addEventListener("dragover", e => { e.preventDefault(); scanDropZone.style.borderColor = "#C77D2E"; });
+scanDropZone.addEventListener("dragleave", () => { scanDropZone.style.borderColor = "#CFC9B8"; });
+scanDropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  scanDropZone.style.borderColor = "#CFC9B8";
+  addScanFiles(Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/")));
+});
+scanInput.addEventListener("change", e => {
+  addScanFiles(Array.from(e.target.files));
+  scanInput.value = "";
+});
+
+function addScanFiles(files) {
+  files.forEach(file => {
+    const id = Date.now() + "-" + Math.random().toString(36).slice(2);
+    const reader = new FileReader();
+    reader.onload = evt => {
+      const dataUrl = evt.target.result;
+      const base64 = dataUrl.split(",")[1];
+      scanFiles.push({ id, file, dataUrl, base64, mediaType: file.type, status: "pending" });
+      renderScanList();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderScanList() {
+  const list = document.getElementById("scan-list");
+  const actions = document.getElementById("scan-actions");
+  actions.style.display = scanFiles.length ? "flex" : "none";
+
+  list.innerHTML = `<div class="scan-grid">${scanFiles.map(f => `
+    <div class="scan-item">
+      <button class="scan-remove" data-id="${f.id}" title="Remove">×</button>
+      <img src="${f.dataUrl}" alt="bill photo">
+      <div class="scan-info">
+        <span class="scan-badge ${f.status}">${scanStatusLabel(f.status)}</span>
+        ${f.rawText ? `<details style="margin-top:6px;"><summary style="cursor:pointer;color:var(--ink-soft);font-size:10.5px;">Raw text</summary><div style="font-family:var(--mono);font-size:9.5px;color:var(--ink-soft);white-space:pre-wrap;max-height:90px;overflow:auto;margin-top:4px;">${escapeHtml(f.rawText)}</div></details>` : ""}
+      </div>
+    </div>
+  `).join("")}</div>`;
+
+  list.querySelectorAll(".scan-remove").forEach(btn => {
+    btn.addEventListener("click", e => {
+      scanFiles = scanFiles.filter(f => f.id !== e.target.dataset.id);
+      renderScanList();
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function scanStatusLabel(status) {
+  return { pending: "Ready", working: "Reading…", done: "Extracted", error: "Failed" }[status] || status;
+}
+
+document.getElementById("extract-btn").addEventListener("click", extractAllScans);
+
+// Gemini key — stored only in this browser via localStorage, never sent
+// anywhere except directly to Google's API.
+let geminiApiKey = localStorage.getItem("gstr_gemini_key") || "";
+
+const geminiKeyInput = document.getElementById("gemini-key-input");
+if (geminiApiKey) geminiKeyInput.value = geminiApiKey;
+geminiKeyInput.addEventListener("input", () => {
+  geminiApiKey = geminiKeyInput.value.trim();
+  if (geminiApiKey) localStorage.setItem("gstr_gemini_key", geminiApiKey);
+  else localStorage.removeItem("gstr_gemini_key");
+});
+
+const GEMINI_MODEL = "gemini-3.6-flash";
+
+// Reads a bill photo by calling Google's Gemini vision model directly from
+// the browser, using the key pasted into the box above. No backend server —
+// the request goes straight from this page to generativelanguage.googleapis.com.
+async function visionExtract(scanFile) {
+  if (!geminiApiKey) {
+    throw new Error('Paste a free Gemini API key above first — get one at aistudio.google.com/apikey');
+  }
+
+  const schema = SCHEMAS[currentReturn];
+  const fieldList = schema.fields.map(f => `- ${f.key}: ${f.header} (example: "${f.placeholder}")`).join("\n");
+
+  const prompt = `You are reading a photo of an Indian GST invoice/bill (it may be handwritten, printed, or a mix). Extract these fields and respond with ONLY a single raw JSON object — no markdown fences, no commentary, no explanation before or after.
+
+Fields to extract (use these exact keys):
+${fieldList}
+
+Rules:
+- If a field is not visible or you cannot determine it confidently, use an empty string "" for that field — never guess a fake value.
+- gstin: the 15-character GSTIN if printed on the bill (of the party relevant to this return type — ${schema.partyLabel}). Read carefully; GSTINs mix letters and numbers.
+- invoiceDate: keep the format as written on the bill (e.g. DD-MM-YYYY or DD Mon YYYY).
+- invoiceValue: the final/grand total payable on the bill, digits only (no ₹, no commas).
+- taxableValue: the value before GST was added, digits only.
+- rate: the GST rate as a plain number (e.g. 18), no % sign. If multiple line items have different rates, use the most prominent/overall rate shown.
+- cess: cess amount if shown, digits only, otherwise "0".
+- placeOfSupply: if you can determine the state from the GSTIN or an address on the bill, format as "<2-digit code>-<State Name>" (e.g. "07-Delhi"); otherwise "".
+- reverseCharge: "Y" or "N" — default to "N" if not mentioned.
+- invoiceType: usually "Regular" unless the bill clearly states otherwise (e.g. "Export", "SEZ").
+
+Respond with ONLY the JSON object.`;
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": geminiApiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { inline_data: { mime_type: scanFile.mediaType, data: scanFile.base64 } },
+              { text: prompt }
+            ]
+          }
+        ],
+        generationConfig: {
+          response_mime_type: "application/json",
+          temperature: 0.1
+        }
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const msg = data.error?.message || `Extraction request failed (${response.status}).`;
+    const friendly = response.status === 429
+      ? "Free-tier quota hit for this minute/day — wait a bit and try again."
+      : response.status === 400 && /API key/i.test(msg)
+        ? "That doesn't look like a valid Gemini API key — check the box above."
+        : msg;
+    throw new Error(friendly);
+  }
+
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) {
+    throw new Error("No response from the vision model — try again.");
+  }
+
+  const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    throw new Error("Couldn't parse the extracted data — try re-scanning this bill.");
+  }
+  return parsed;
+}
+
+async function extractAllScans() {
+  const statusEl = document.getElementById("scan-status");
+  const pending = scanFiles.filter(f => f.status === "pending" || f.status === "error");
+  if (pending.length === 0) { statusEl.textContent = "Nothing new to extract."; return; }
+
+  document.getElementById("extract-btn").disabled = true;
+  let done = 0, failed = 0;
+
+  for (const f of pending) {
+    f.status = "working";
+    renderScanList();
+    statusEl.textContent = `Reading ${done + failed + 1} of ${pending.length}…`;
+    try {
+      const extracted = await visionExtract(f);
+      f.rawText = JSON.stringify(extracted, null, 2);
+      f.status = "done";
+      manualRows.push(normalizeExtractedRow(extracted));
+      done++;
+    } catch (err) {
+      console.error("Extraction failed:", err);
+      f.status = "error";
+      statusEl.textContent = err.message || "Extraction failed.";
+      failed++;
+    }
+    renderScanList();
+  }
+
+  document.getElementById("extract-btn").disabled = false;
+  statusEl.textContent = `Done — ${done} extracted${failed ? `, ${failed} failed` : ""}. Review the rows below before exporting, especially handwriting.`;
+
+  if (done > 0) {
+    // Jump to manual tab so the person reviews the extracted rows
+    document.querySelector('.tab-btn[data-tab="manual"]').click();
+    renderManualBody();
+  }
+}
+
+function normalizeExtractedRow(extracted) {
+  const schema = SCHEMAS[currentReturn];
+  const row = {};
+  schema.fields.forEach(f => {
+    let val = extracted[f.key] ? String(extracted[f.key]) : "";
+    if (f.key === "rate") {
+      // Strip any % sign or stray non-numeric characters — keep digits and a single decimal point only
+      val = val.replace(/%/g, "").trim();
+      val = val.replace(/[^0-9.]/g, "");
+    }
+    row[f.key] = val;
+  });
+  return row;
+}
+
+</script>
+</body>
+</html>
